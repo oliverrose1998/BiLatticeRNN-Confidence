@@ -59,9 +59,9 @@ def pr(labels, predictions):
     Returns:
         tuple -- precision array, recall array, area float
     """
-    precision, recall, _ = precision_recall_curve(labels, predictions)
+    precision, recall, threshold  = precision_recall_curve(labels, predictions)
     area = auc(recall, precision)
-    return precision, recall, area
+    return precision, recall, area, threshold
 
 def plot_roc(fpr, tpr, area, name, dst_dir):
     """Plotting ROC curve.
@@ -102,10 +102,10 @@ def plot_pr(precision, recall, area, name, dst_dir=None):
         dst_dir = ''
 
     plt.clf()
-    plt.figure(figsize=(3, 3))
+    plt.figure(figsize=(5,5))
     plt.rcParams["font.family"] = "Times New Roman"
     for (x_val, y_val, a_val, string) in zip(recall, precision, area, name):
-        label = string + ' (AUC = %0.4f)' %a_val
+        label = string
         plt.plot(x_val, y_val, label=label)
     plt.legend(loc='lower right')
     plt.xlim([0, 1])
@@ -141,3 +141,22 @@ def plot_det(fnr, fpr, name, dst_dir):
     axes.xaxis.set_major_formatter(mpl.ticker.FormatStrFormatter('%.2f'))
     axes.yaxis.set_major_formatter(mpl.ticker.FormatStrFormatter('%.2f'))
     plt.savefig(os.path.join(dst_dir, 'det.pdf'), bbox_inches='tight')
+
+def bin_results(reference, prediction, posterior, measure, lower_limit, upper_limit):
+    """ Return the reference and prediction for sequences in within the limits of the measure"""
+    new_reference = []
+    new_prediction = []
+    new_posterior = []
+    for i, m in enumerate(measure):
+        if lower_limit <= m < upper_limit:
+            new_reference.append(reference[i])
+            new_prediction.append(prediction[i])
+            new_posterior.append(posterior[i])
+    return np.array(new_reference), np.array(new_prediction), np.array(new_posterior)
+
+def f1(precision,recall,threshold):
+    f1_list = 2*precision*recall/(precision+recall)
+    f1_max = max(f1_list)
+    ind = list(f1_list).index(f1_max)
+    return f1_max, precision[ind], recall[ind], threshold[ind]
+       

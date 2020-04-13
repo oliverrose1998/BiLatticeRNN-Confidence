@@ -51,6 +51,12 @@ class Opts():
             # Won't read in the grapheme information
             self.args.grapheme_features = 0
             self.args.grapheme_hidden_size = 0
+        
+        # Attention mechanism architecture
+        attention_arch = self.args.grapheme_arch.split('-')
+        assert len(grapheme_arch) == 2, 'bad grapheme model architecture input argument'
+        self.args.attentionLayers = int(attention_arch[0])
+        self.args.attentionSize = int(attention_arch[1])
 
         # Customized parameters for dataset
         if 'onebest' in self.args.dataset:
@@ -84,9 +90,13 @@ class Opts():
             # Override implicit input size code above
             self.args.inputSize = self.args.forceInputSize
 
-        if self.args.arc_combine_method == 'attention':
-            self.args.attentionLayers = 1
-            self.args.attentionSize = 64
+        # Attention mechanism keys and input size
+        if self.args.attention_key == 'self':
+            self.args.keySize = 0
+        elif self.args.attention_key == 'dist':
+            self.args.keySize = 1
+        else:
+            self.args.keySize = 4
 
         # Settings for debug mode
         if self.args.debug:
@@ -113,12 +123,13 @@ class Opts():
                             + '_' + 'D='+self.args.LRDecay \
                             + '-' + str(self.args.LRDParam) \
                             + '_' + str(lattice_type_tag) \
-                            + '_' + grapheme_encoding_tag \
-                            + '_' + 'F='+str(self.args.grapheme_features) \
-                            + '_' + 'G-C='+str(self.args.grapheme_combination) \
-                            + '_' + self.args.suffix
-
-        if self.args.debug:
+                            + '_' + self.args.attention_arch \
+                            + '_' + 'o='+self.args.attention_order \
+                            + '_' + 'd='+str(self.args.intermediate_dropout) \
+                            + '_' + 'h='+str(self.args.attention_heads) \
+                            + '_' + self.args.suffix  
+  
+        if self.args.debug: 
             self.args.hashKey += '_debug'
         self.args.resume = os.path.join(self.args.model, self.args.hashKey)
         utils.mkdir(self.args.resume)
@@ -173,6 +184,12 @@ class Opts():
                             help='Run the test to see the performance')
         parser.add_argument('--onebest', default=False, action="store_true",
                             help='Train on one-best path only')
+        parser.add_argument('--test_epochs', default=True, action="store_true",
+                            help='Test model after every training epoch')
+        parser.add_argument('--attention_stats', default=False, action="store_true",
+                            help='Retrieve attention weight statistics when test')
+        parser.add_argument('--seq_length_stats', default=False, action="store_true",
+                            help='Display a NCE/AUC values for binned sequence lengths')
         # Optimization options
         parser.add_argument('--LR', default=0.05, type=float,
                             help='Initial learning rate')
@@ -196,7 +213,7 @@ class Opts():
                             choices=['uniform', 'normal',
                                      'xavier_uniform', 'xavier_normal',
                                      'kaiming_uniform', 'kaiming_normal'])
-        parser.add_argument('--arch', default='1-128-1-128', type=str,
+        parser.add_argument('--arch', default='3-64-1-64', type=str,
                             help='Model architecture: '\
                                  'nLSTMLayer-LSTMSize-nFCLayer-nFCSize')
         parser.add_argument('--arc_combine-method', default='mean', type=str,
@@ -215,11 +232,24 @@ class Opts():
                             help='Use a bidirectional recurrent structure to encode the grapheme information')
         parser.add_argument('--encoder-type', default='RNN', type=str,
                             help='The type of bidirectional recurrent encoder to use for grapheme combination',
-                            choices=['RNN', 'GRU', 'LSTM'])
+                            choices=['RNN', 'GRU', 'LSTM', 'ATTENTION'])
         parser.add_argument('--encoding-dropout', default=0, type=float,
                             help='The amount of dropout to apply in the bidirectional grapheme encoding')
         parser.add_argument('--grapheme-arch', default='1-10', type=str,
                             help='Grapheme model architecture: num_layers-layer_size')
+        # Attention Mechanism options
+        parser.add_argument('--attention_order', default='one', type=str,
+                            choices=['zero','one','two','inf','all'],
+                            help='The order of the neighbours (distance of historical states) taken as input to the attention mechanism')
+        parser.add_argument('--attention-arch', default='1-64', type=str,
+                            help='Attention model architecture: num_layers-layer_size')
+        parser.add_argument('--attention_key', default='dist', type=str,
+                            choices=['self','dist','global','local'],
+                            help='The key used for the attention mechanism')
+        parser.add_argument('--intermediate_dropout', default=0, type=float,
+                            help='The amount of dropout to apply in the intermediate DNN stage')
+        parser.add_argument('--attention_heads', default=1, type=int,
+                            help='The number of attention heads used')
         # Naming options
         parser.add_argument('--suffix', default='LatticeRNN', type=str,
                             help='Suffix for saving the model')

@@ -11,6 +11,8 @@ import torch.multiprocessing as mp
 from torch.nn.utils import clip_grad_norm
 import utils, criterion
 
+import sys
+
 class Trainer():
     """Trainer object for training, validation and testing the model."""
 
@@ -127,6 +129,11 @@ class Trainer():
     def forward_one_lattice(self, lattice, target, index, results, update):
         """Forward through one single lattice on CPU."""
         if lattice.edge_num == 0 or not target.ref:
+            print('In if')
+            #print('target.ref: {}'.format(target.ref))
+            #print('lattice.edge_num: {}'.format(lattice.edge_num))
+            #print('target.path: {}'.format(target.path))
+            #print('lattice.path: {}'.format(lattice.path))
             results[index] = [(0, 0), (0, 0), ([], [])]
         else:
             if update:
@@ -181,8 +188,13 @@ class Trainer():
             if self.opt.onebest:
                 all_loss, all_count, all_pred, all_ref = self.xent_onebest(
                     output.data.view(-1), target.indices, target.ref)
-                assert all_count == count_onebest, \
-                       "inconsistent count on onebest"
+                if all_count != count_onebest:
+                    print("inconsistent count on onebest")
+                    print('all_count: {}'.format(all_count))
+                    print('count_onebest: {}'.format(count_onebest))
+                    print('output.data.view(-1): {}'.format(output.data.view(-1)))
+                    print('target.indices: {}'.format(target.indices))
+                    print('target.ref: {}'.format(target.ref))
             else:
                 all_loss, all_count, all_pred, all_ref = self.xent(
                     output.data.view(-1), lattice.ignore, target.target)
@@ -316,6 +328,7 @@ class Trainer():
         prediction = []
         reference = []
         posteriors = []
+        seq_length = []
         avg_loss, total_count = 0, 0
         avg_loss_onebest, total_count_onebest = 0, 0
         wrapper = tqdm(val_loader, dynamic_ncols=True)
@@ -342,6 +355,7 @@ class Trainer():
                 batch_count += result[0][1]
                 batch_loss_onebest += result[1][0]
                 batch_count_onebest += result[1][1]
+                #print('result[2][0]: {}'.format(len(result[2][0])))
                 prediction += result[2][0]
                 reference += result[2][1]
             # Compute average losses and increment counters
@@ -369,7 +383,17 @@ class Trainer():
                     else:
                         if i not in lattice.ignore:
                             posteriors.append(edge_data[-1])
-            assert len(posteriors) == len(prediction), "wrong lengths"
+
+                seq_length.append(i)
+
+                #print(target.target.shape[0])
+                #print(lattice.edges.shape[0])
+                assert target.target.shape[0] == target.target.shape[0], 'error found'
+            if len(posteriors) == len(prediction):
+                pass
+            else:
+                print('Wrong lengths')
+                sys.exit()
 
         self.logger['test'].write('%f %f\n' %(avg_loss, avg_loss_onebest))
         print("".ljust(7) + "Test loss".ljust(16)
@@ -379,10 +403,12 @@ class Trainer():
         prediction = np.array(prediction)
         reference = np.array(reference)
         posteriors = np.array(posteriors)
+        seq_length = np.array(seq_length)
+
         if self.opt.onebest:
-            return avg_loss_onebest, prediction, reference, posteriors
+            return avg_loss_onebest, prediction, reference, posteriors, seq_length
         else:
-            return avg_loss, prediction, reference, posteriors
+            return avg_loss, prediction, reference, posteriors, seq_length
 
 def create_trainer(model, criterion, opt, optim_state):
     """New Trainer object."""

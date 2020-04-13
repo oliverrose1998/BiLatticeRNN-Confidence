@@ -36,6 +36,7 @@ class Lattice:
         self.parent_dict = None
         self.edges = None
         self.mask = None
+        self.matrix = None
         self.ignore = []
         self.is_grapheme = True if lattice_type == 'grapheme' else False
         self.load()
@@ -49,6 +50,9 @@ class Lattice:
         self.edges = data['edge_data']
         self.child_dict = data['child_2_parent'].item()
         self.parent_dict = data['parent_2_child'].item()
+
+        if 'matrix' in data.keys():
+            self.matrix = data['matrix']
 
         if self.is_grapheme:
             self.grapheme_data = data['grapheme_data']
@@ -82,7 +86,13 @@ class Lattice:
         """ Reverse the graph """
         self.nodes.reverse()
         self.child_dict, self.parent_dict = self.parent_dict, self.child_dict
-
+        
+        dim = self.matrix.shape[0]
+        matrix = np.zeros([dim,dim])
+        for ind, row in enumerate(self.matrix):
+            matrix[dim-ind-1,:] = row[::-1]
+        self.matrix = matrix 
+            
     def feature_dim(self):
         return self.edges.shape[1]
 

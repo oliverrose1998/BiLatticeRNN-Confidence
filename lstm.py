@@ -91,6 +91,8 @@ class LSTM(nn.Module):
         # Default: last element of the input feature is the posterior prob
         index = -1
         in_hidden = torch.cat([hidden[i].view(1, -1) for i in in_edges], 0)
+        #print(in_hidden)
+        #print(type(in_hidden))
         if len(in_edges) == 1:
             return in_hidden
         elif combine_method == 'max':
@@ -137,32 +139,83 @@ class LSTM(nn.Module):
         node_hidden[lattice.nodes[0]] = state[0].view(1, -1)
         node_cell[lattice.nodes[0]] = state[1].view(1, -1)
 
+        matrix = lattice.matrix
+        
         # The incoming and outgoing edges must be:
         # either a list of lists (for confusion network)
         # or a list of ints (for normal lattices)
         for each_node in lattice.nodes:
+            #print('./././././././././././././././././././././././././././././././././././././././././././././././')
+            #print(f'each_node {each_node}')
+            #print(lattice.edges)
             # If the node is a child, compute its node state by combining all
-            # the incoming edge states.
+            # the incoming edge states
             if each_node in lattice.child_dict:
-                in_edges = [i for i in lattice.child_dict[each_node].values()]
+                in_edges = []
+                node_distances = matrix[each_node].tolist()
+                input_nodes = [i for i, x in enumerate(node_distances) if x == -1]  
+
+                for node in input_nodes:                 
+ 
+                    edge_id = lattice.child_dict[each_node][node]
+                    in_edges.append(edge_id)
+
                 if all(isinstance(item, list) for item in in_edges):
-                    in_edges = [item for sublist in in_edges
+                     in_edges = [item for sublist in in_edges
                                 for item in sublist]
                 else:
-                    assert all(isinstance(item, int) for item in in_edges)
+                     assert all(isinstance(item, int) for item in in_edges)
+
+                #in_edges = list(range(0, max(in_edges)+1, 1))
+
+                if all(isinstance(item, list) for item in in_edges):
+                     in_edges = [item for sublist in in_edges
+                                for item in sublist]
+                else:
+                     assert all(isinstance(item, int) for item in in_edges)
+                
+                #in_hidden = torch.cat([edge_hidden[i].view(1, -1) for i in in_edges], 0)
+                #print(in_hidden.shape)
+         
+                #print(f'in_edges {in_edges}')
                 node_hidden[each_node] = self.combine_edges(
                     combine_method, lattice, edge_hidden, in_edges)
                 node_cell[each_node] = self.combine_edges(
                     combine_method, lattice, edge_cell, in_edges)
 
+            node_hidden_shape = node_hidden[each_node].size()
+            node_cell_shape = node_cell[each_node].size()
+
+
+            #print(f'node_hidden_shape {node_hidden_shape}')
+            #print(f'node_cell_shape {node_cell_shape}')
+
+            node_hidden_0 = node_hidden[each_node][0][0]
+            node_cell_0 = node_cell[each_node][0][0]
+
+            #print(f'node_hidden {node_hidden_0}')
+            #print(f'node_cell {node_cell_0}') 
+
             # If the node is a parent, compute each outgoing edge states
             if each_node in lattice.parent_dict:
-                out_edges = lattice.parent_dict[each_node].values()
+                out_edges = []
+                node_distances = matrix[each_node].tolist()
+                input_nodes = [i for i, x in enumerate(node_distances) if x == 1]
+
+                for node in input_nodes:
+       
+                    edge_id = lattice.parent_dict[each_node][node]
+                    out_edges.append(edge_id)
+
+                #out_edges = list(range(min(out_edges), len(lattice.edges), 1))
+
                 if all(isinstance(item, list) for item in out_edges):
                     out_edges = [item for sublist in out_edges
                                  for item in sublist]
                 else:
                     assert all(isinstance(item, int) for item in out_edges)
+                
+                #print(f'out_edges {out_edges}')
                 for each_edge in out_edges:
                     old_state = (node_hidden[each_node], node_cell[each_node])
                     if each_edge in lattice.ignore:
@@ -170,8 +223,11 @@ class LSTM(nn.Module):
                     else:
                         new_state = cell.forward(input_[each_edge].view(1, -1),
                                                  old_state)
+                    
+                    inputs = input_[each_edge]
+                    view = input_[each_edge].view(1,-1) 
                     edge_hidden[each_edge], edge_cell[each_edge] = new_state
-
+         
         end_node_state = (node_hidden[lattice.nodes[-1]],
                           node_cell[lattice.nodes[-1]])
         edge_hidden = torch.cat(edge_hidden, 0)
@@ -203,4 +259,6 @@ class LSTM(nn.Module):
             cur_h_n = torch.cat(cur_h_n, 0)
             cur_c_n = torch.cat(cur_c_n, 0)
             state = (cur_h_n, cur_c_n)
+        #print('output shape')
+        #print(output.shape)
         return output
